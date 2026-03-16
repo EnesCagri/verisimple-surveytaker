@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "survengine";
+  default: true;
+  color-scheme: light;
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(97.5% 0.003 280);
+  --color-base-300: oklch(94% 0.006 280);
+  --color-base-content: oklch(25% 0.01 280);
+  --color-primary: oklch(65% 0.19 281);
+  --color-primary-content: oklch(100% 0 0);
+  --color-secondary: oklch(75% 0.12 281);
+  --color-secondary-content: oklch(25% 0.01 280);
+  --color-accent: oklch(70% 0.15 281);
+  --color-accent-content: oklch(100% 0 0);
+  --color-neutral: oklch(45% 0.02 280);
+  --color-neutral-content: oklch(98% 0 0);
+  --color-info: oklch(72% 0.11 230);
+  --color-success: oklch(72% 0.15 155);
+  --color-warning: oklch(80% 0.15 80);
+  --color-error: oklch(65% 0.2 25);
+  --rounded-box: 1rem;
+  --rounded-btn: 0.75rem;
+  --rounded-badge: 1rem;
+}
+
+body {
+  @apply bg-base-100 min-h-screen antialiased;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Smooth transitions for all interactive elements */
+.btn, .card, .input, .textarea, .select, .badge {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle focus ring */
+.input:focus, .textarea:focus, .select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px oklch(65% 0.19 281 / 0.15);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(80% 0.02 280);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(70% 0.03 280);
+}
+
+/* fadeSlideIn animation for question transitions */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ProseMirror / Tiptap rich text styles */
+.ProseMirror {
+  outline: none !important;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: oklch(70% 0.02 280);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.75rem !important;
+  margin: 0.75rem 0 !important;
+}
+
+.ProseMirror li {
+  display: list-item !important;
+  list-style-position: outside !important;
+  margin: 0.5rem 0 !important;
+  padding-left: 0.5rem !important;
+}
+
+.ProseMirror ul li {
+  list-style-type: disc !important;
+}
+
+.ProseMirror ol li {
+  list-style-type: decimal !important;
+}
+
+.ProseMirror ul li::marker {
+  color: oklch(65% 0.19 281) !important;
+  font-size: 1.2em !important;
+}
+
+.ProseMirror ol li::marker {
+  color: oklch(65% 0.19 281) !important;
+  font-weight: 600 !important;
+  font-size: 1em !important;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+
+.ProseMirror h1 {
+  font-size: 1.5rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.25rem;
+}
+
+.ProseMirror h3 {
+  font-size: 1.125rem;
+}
+
+.ProseMirror p {
+  margin: 0.5rem 0;
+}
+
+.ProseMirror strong {
+  font-weight: 600;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.ProseMirror a {
+  color: oklch(65% 0.19 281);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.ProseMirror a:hover {
+  color: oklch(60% 0.19 281);
+}
