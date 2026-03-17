@@ -63,7 +63,6 @@ export function SurveyTakerPage({
 
   // Draft restored toast
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
-
   useEffect(() => {
     if (draftRestored) {
       setShowRestoredBanner(true);
@@ -84,7 +83,7 @@ export function SurveyTakerPage({
   // No questions state
   if (questions.length === 0) {
     return (
-      <div className="min-h-screen bg-base-100 flex flex-col">
+      <div className="h-dvh overflow-hidden bg-base-100 flex flex-col">
         <SurveyHeader title={title} showSavedIndicator={false} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-base-content/30">
@@ -102,123 +101,81 @@ export function SurveyTakerPage({
     const unanswered = getUnansweredQuestions();
 
     return (
-      <div className="min-h-screen bg-base-100 flex flex-col">
+      <div className="h-dvh overflow-hidden bg-base-100 flex flex-col">
         <SurveyHeader title={title} showSavedIndicator={false} />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center max-w-lg w-full">
-            <div className="w-20 h-20 rounded-3xl bg-success/10 flex items-center justify-center mx-auto mb-6">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-base-content/80 mb-2">Tamamlandı!</h2>
-            <p className="text-base-content/40 mb-6">Anketi tamamladınız, teşekkürler.</p>
-
-            {/* Soft validation: unanswered question warning */}
-            {unanswered.length > 0 && (
-              <div className="mb-6 p-4 rounded-2xl bg-warning/10 border border-warning/30 text-left">
-                <div className="flex items-center gap-2 mb-3">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning shrink-0">
-                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                    <path d="M12 9v4" />
-                    <path d="M12 17h.01" />
-                  </svg>
-                  <span className="text-sm font-semibold text-warning">
-                    {unanswered.length} cevaplanmamış soru var
-                  </span>
-                </div>
-                <p className="text-xs text-base-content/50 mb-3">
-                  Aşağıdaki soruları cevaplanmadan geçtiniz. Geri dönüp cevaplayabilir veya bu şekilde gönderebilirsiniz.
-                </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {unanswered.map((q) => (
-                    <button
-                      key={q.guid}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-base-100 border border-base-300/40 hover:border-warning/40 hover:bg-warning/5 transition-all text-left group"
-                      onClick={() => startUnansweredReview(q.guid)}
-                    >
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold bg-warning/15 text-warning shrink-0">
-                        {q.order}
-                      </span>
-                      <span className="text-sm text-base-content/60 group-hover:text-base-content/80 truncate flex-1">
-                        {q.text || 'Soru metni yok'}
-                      </span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-base-content/20 group-hover:text-warning shrink-0">
-                        <path d="m15 18-6-6 6-6" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
+        {/* scrollable center — keeps header visible at top */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex items-start justify-center p-6 min-h-full">
+            <div className="text-center max-w-lg w-full py-8">
+              <div className="w-16 h-16 rounded-3xl bg-success/10 flex items-center justify-center mx-auto mb-5">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
               </div>
-            )}
+              <h2 className="text-2xl font-bold text-base-content/80 mb-2">Tamamlandı!</h2>
+              <p className="text-base-content/40 mb-6">Anketi tamamladınız, teşekkürler.</p>
 
-            {/* Control Question Results */}
-            {Object.keys(controlQuestionResults).length > 0 && (
-              <div className="mb-6 max-w-md mx-auto">
-                <div className="p-4 rounded-xl bg-base-200/50 border border-base-300/40">
-                  <p className="text-sm font-semibold text-base-content/70 mb-3">Kontrol Soruları Sonuçları</p>
-                  <div className="space-y-2">
-                    {Object.entries(controlQuestionResults).map(([guid, result]) => {
-                      const question = questions.find((q) => q.guid === guid);
-                      if (!question) return null;
-                      return (
-                        <div
-                          key={guid}
-                          className={`p-3 rounded-lg border-2 ${
-                            result.isCorrect
-                              ? 'border-success/40 bg-success/10'
-                              : 'border-error/40 bg-error/10'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            {result.isCorrect ? (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
-                                <path d="M20 6 9 17l-5-5" />
-                              </svg>
-                            ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-error">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            )}
-                            <span className={`text-xs font-semibold ${result.isCorrect ? 'text-success' : 'text-error'}`}>
-                              {result.isCorrect ? 'Doğru' : 'Yanlış'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-base-content/60 mb-1 truncate">{question.text}</p>
-                          <p className="text-[10px] text-base-content/40">
-                            Verilen: {result.userAnswer.join(', ') || 'Cevap yok'} | Doğru: {result.correctAnswer.join(', ')}
-                          </p>
-                        </div>
-                      );
-                    })}
+              {/* Soft validation: unanswered question warning */}
+              {unanswered.length > 0 && (
+                <div className="mb-6 p-4 rounded-2xl bg-warning/10 border border-warning/30 text-left">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning shrink-0">
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                      <path d="M12 9v4" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                    <span className="text-sm font-semibold text-warning">
+                      {unanswered.length} cevaplanmamış soru var
+                    </span>
+                  </div>
+                  <p className="text-xs text-base-content/50 mb-3">
+                    Aşağıdaki soruları cevaplanmadan geçtiniz. Geri dönüp cevaplayabilir veya bu şekilde gönderebilirsiniz.
+                  </p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {unanswered.map((q) => (
+                      <button
+                        key={q.guid}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-base-100 border border-base-300/40 hover:border-warning/40 hover:bg-warning/5 transition-all text-left group"
+                        onClick={() => startUnansweredReview(q.guid)}
+                      >
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold bg-warning/15 text-warning shrink-0">
+                          {q.order}
+                        </span>
+                        <span className="text-sm text-base-content/60 group-hover:text-base-content/80 truncate flex-1">
+                          {q.text || 'Soru metni yok'}
+                        </span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-base-content/20 group-hover:text-warning shrink-0">
+                          <path d="m15 18-6-6 6-6" />
+                        </svg>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-center">
-              <button
-                className="btn btn-ghost btn-sm rounded-xl"
-                onClick={() => {
-                  reset();
-                  onRestart?.();
-                }}
-              >
-                Tekrar Başla
-              </button>
-              {onComplete && (
-                <button
-                  className="btn btn-primary btn-sm rounded-xl px-6"
-                  onClick={() => onComplete({
-                    answers: answersData,
-                    controlQuestionResults,
-                    durationMs: getDurationMs(),
-                  })}
-                >
-                  Gönder
-                </button>
               )}
+
+              <div className="flex gap-3 justify-center">
+                <button
+                  className="btn btn-ghost btn-sm rounded-xl"
+                  onClick={() => {
+                    reset();
+                    onRestart?.();
+                  }}
+                >
+                  Tekrar Başla
+                </button>
+                {onComplete && (
+                  <button
+                    className="btn btn-primary btn-sm rounded-xl px-6"
+                    onClick={() => onComplete({
+                      answers: answersData,
+                      controlQuestionResults,
+                      durationMs: getDurationMs(),
+                    })}
+                  >
+                    Gönder
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -227,7 +184,7 @@ export function SurveyTakerPage({
   }
 
   return (
-    <div className="min-h-screen bg-base-100 flex flex-col">
+    <div className="h-dvh overflow-hidden bg-base-100 flex flex-col">
       <SurveyHeader title={title} showSavedIndicator={showSavedIndicator} />
 
       {/* Draft restored toast */}
@@ -244,8 +201,8 @@ export function SurveyTakerPage({
         </div>
       )}
 
-      {/* Progress */}
-      <div className="px-6 sm:px-0 w-full pt-6 sm:max-w-xl sm:mx-auto">
+      {/* Progress — compact top margin */}
+      <div className="px-6 sm:px-0 w-full pt-3 sm:pt-4 sm:max-w-xl sm:mx-auto shrink-0">
         <ProgressBar
           progress={progress}
           currentStep={currentStep}
@@ -253,10 +210,10 @@ export function SurveyTakerPage({
         />
       </div>
 
-      {/* Main body = Question */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Question body — fills remaining height, scrolls internally if needed */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         <div className="flex-1 flex items-center justify-center overflow-y-auto">
-          <div className="w-full max-w-2xl px-6 py-10">
+          <div className="w-full max-w-2xl px-6 py-4 sm:py-8">
             {currentQuestion && (
               <SurveyQuestion
                 key={currentQuestion.guid}
@@ -277,9 +234,9 @@ export function SurveyTakerPage({
         </div>
       </div>
 
-      {/* Navigation buttons */}
-      <div className="border-t border-base-300/30 bg-base-100">
-        <div className="max-w-xl mx-auto px-6 py-4">
+      {/* Navigation buttons — always visible at bottom */}
+      <div className="border-t border-base-300/30 bg-base-100 shrink-0">
+        <div className="max-w-xl mx-auto px-6 py-3 sm:py-4">
           {/* Required warning */}
           {isCurrentQuestionRequired && !isCurrentQuestionAnswered && (
             <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-warning/10 border border-warning/20 text-warning text-sm">
@@ -328,13 +285,13 @@ export function SurveyTakerPage({
 
 function SurveyHeader({ title, showSavedIndicator }: { title: string; showSavedIndicator: boolean }) {
   return (
-    <header className="flex items-center gap-4 px-5 py-3 border-b border-base-300/30">
-      <div className="flex-1">
+    <header className="flex items-center gap-4 px-5 py-3 border-b border-base-300/30 shrink-0">
+      <div className="flex-1 min-w-0">
         <span className="text-xs font-medium text-primary/60 uppercase tracking-wider">Anket</span>
         <h1 className="text-sm font-semibold text-base-content/70 truncate">{title}</h1>
       </div>
       <div
-        className="text-xs text-success/70 font-medium transition-opacity duration-500"
+        className="text-xs text-success/70 font-medium transition-opacity duration-500 shrink-0"
         style={{ opacity: showSavedIndicator ? 1 : 0 }}
       >
         <span className="flex items-center gap-1.5">
