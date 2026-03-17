@@ -1,36 +1,59 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Question, ConditionalRule, SequentialEdges } from '../types/survey';
 import { evaluateCondition } from '../utils/condition';
 
-/**
- * Survey taker engine that supports conditional flow and all question types.
- * Ported from survengine's usePreview hook.
- *
- * Answer stores:
- *  - answers: Record<guid, string[]>                        → SingleChoice / MultipleChoice
- *  - textAnswers: Record<guid, string>                      → TextEntry / RichText
- *  - ratingAnswers: Record<guid, number>                    → Rating (1-based, 0 = none)
- *  - matrixAnswers: Record<guid, Record<rowIndex, string[]>> → MatrixLikert
- *  - sortableAnswers: Record<guid, string[]>                → Sortable
- *
- * Navigation logic:
- *  1. When user clicks "Next", evaluate each ConditionalRule via evaluateCondition.
- *  2. If a matching rule has action 'end_survey' → mark as completed.
- *  3. If a matching rule has action 'jump_to'  → go to that question.
- *  4. If no matching rule → check sequential edges for custom flow.
- *  5. If no sequential edge → go to the next sequential question by order.
- */
+type DraftV1 = {
+  v: 1;
+  updatedAt: string;
+  startedAt: number;
+  path: string[];
+  answers: Record<string, string[]>;
+  textAnswers: Record<string, string>;
+  ratingAnswers: Record<string, number>;
+  matrixAnswers: Record<string, Record<number, string[]>>;
+  sortableAnswers: Record<string, string[]>;
+  ended: boolean;
+};
+
+function getDraftKey(surveyId: string): string {
+  return `vs:taker:draft:${surveyId}`;
+}
+
+function safeReadDraft(surveyId: string): DraftV1 | null {
+  try {
+    const raw = window.localStorage.getItem(getDraftKey(surveyId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftV1;
+    if (!parsed || parsed.v !== 1) return null;
+    if (!Array.isArray(parsed.path)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function safeWriteDraft(surveyId: string, draft: DraftV1): void {
+  try {
+    window.localStorage.setItem(getDraftKey(surveyId), JSON.stringify(draft));
+  } catch {
+    // ignore quota / privacy errors
+  }
+}
+
 export function useSurveyTaker(
   questions: Question[],
   conditions: ConditionalRule[] = [],
   sequentialEdges?: SequentialEdges,
+  opts?: { surveyId?: string },
 ) {
-  // Always sort questions by order for consistent navigation
-  const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
+  const sortedQuestions = useMemo(() => [...questions].sort((a, b) => a.order - b.order), [questions]);
 
-  const [path, setPath] = useState<string[]>(
-    sortedQuestions.length > 0 ? [sortedQuestions[0].guid] : [],
-  );
+  const surveyId = opts?.surveyId;
+  const loadedDraftRef = useRef(false);
+
+  const [path, setPath] = useState<string[]>(() => (
+    sortedQuestions.length > 0 ? [sortedQuestions[0].guid] : []
+  ));
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
   const [ratingAnswers, setRatingAnswers] = useState<Record<string, number>>({});
@@ -40,6 +63,76 @@ export function useSurveyTaker(
   const [controlQuestionResults, setControlQuestionResults] = useState<
     Record<string, { isCorrect: boolean; userAnswer: string[]; correctAnswer: string[] }>
   >({});
+
+  // Duration tracking
+  const startedAtRef = useRef<number>(Date.now());
+
+  // Draft restore indicator
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  // Draft autosave timestamp indicator
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+
+  // Unanswered review mode (jump only between unanswered questions)
+  const [reviewUnanswered, setReviewUnanswered] = useState(false);
+
+  // Load draft once (if available) when embedded with a surveyId
+  useEffect(() => {
+    if (!surveyId) return;
+    if (loadedDraftRef.current) return;
+    loadedDraftRef.current = true;
+
+    const draft = safeReadDraft(surveyId);
+    if (!draft) return;
+
+    const validSet = new Set(sortedQuestions.map((q) => q.guid));
+    const filteredPath = (draft.path || []).filter((g) => validSet.has(g));
+    const fallbackPath = sortedQuestions.length > 0 ? [sortedQuestions[0].guid] : [];
+
+    setPath(filteredPath.length ? filteredPath : fallbackPath);
+    setAnswers(draft.answers || {});
+    setTextAnswers(draft.textAnswers || {});
+    setRatingAnswers(draft.ratingAnswers || {});
+    setMatrixAnswers(draft.matrixAnswers || {});
+    setSortableAnswers(draft.sortableAnswers || {});
+    setEnded(!!draft.ended);
+
+    if (draft.startedAt) {
+      startedAtRef.current = draft.startedAt;
+    }
+
+    if (filteredPath.length > 1 || Object.keys(draft.answers || {}).length > 0) {
+      setDraftRestored(true);
+    }
+  }, [surveyId, sortedQuestions]);
+
+  // Persist draft (throttled) while answering
+  const persistTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!surveyId) return;
+    if (!loadedDraftRef.current) return;
+
+    if (persistTimerRef.current) window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      safeWriteDraft(surveyId, {
+        v: 1,
+        updatedAt: new Date().toISOString(),
+        startedAt: startedAtRef.current,
+        path,
+        answers,
+        textAnswers,
+        ratingAnswers,
+        matrixAnswers,
+        sortableAnswers,
+        ended,
+      });
+      setLastSavedAt(Date.now());
+    }, 500);
+
+    return () => {
+      if (persistTimerRef.current) window.clearTimeout(persistTimerRef.current);
+    };
+  }, [surveyId, path, answers, textAnswers, ratingAnswers, matrixAnswers, sortableAnswers, ended]);
 
   const currentGuid = path[path.length - 1] ?? null;
   const currentQuestion = questions.find((q) => q.guid === currentGuid) ?? null;
@@ -67,9 +160,6 @@ export function useSurveyTaker(
     return conditions.some((c) => c.sourceQuestionId === sourceGuid);
   }
 
-  /**
-   * Check if a required question has been answered.
-   */
   function isQuestionAnswered(question: Question): boolean {
     const guid = question.guid;
 
@@ -105,15 +195,44 @@ export function useSurveyTaker(
     }
   }
 
-  /**
-   * Build a map of sequential flow: sourceGuid → targetGuid.
-   */
+  // Soft validation: find unanswered questions from the visited path
+  const getUnansweredQuestions = useCallback((): { guid: string; order: number; text: string }[] => {
+    const visited = new Set(path);
+    return sortedQuestions
+      .filter((q) => visited.has(q.guid) && !isQuestionAnswered(q))
+      .map((q) => ({ guid: q.guid, order: q.order, text: q.text }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, sortedQuestions, answers, textAnswers, ratingAnswers, matrixAnswers, sortableAnswers]);
+
+  // Navigate back to a specific question by truncating the path
+  const goToQuestion = useCallback((guid: string) => {
+    const idx = path.indexOf(guid);
+    if (idx >= 0) {
+      setPath(path.slice(0, idx + 1));
+      setEnded(false);
+    }
+  }, [path]);
+
+  // Start review mode at a specific unanswered question
+  const startUnansweredReview = useCallback((guid: string) => {
+    setReviewUnanswered(true);
+    const idx = path.indexOf(guid);
+    if (idx >= 0) {
+      setPath(path.slice(0, idx + 1));
+      setEnded(false);
+    }
+  }, [path]);
+
+  // Duration measurement
+  const getDurationMs = useCallback((): number => {
+    return Date.now() - startedAtRef.current;
+  }, []);
+
   function buildFlowMap(): Map<string, string> {
     const map = new Map<string, string>();
     const blockedSet = new Set(sequentialEdges?.blockedEdges ?? []);
     const customEdgesList = sequentialEdges?.customEdges ?? [];
 
-    // Default sequential edges by order (only if not blocked)
     for (let i = 0; i < sortedQuestions.length - 1; i++) {
       const src = sortedQuestions[i].guid;
       const tgt = sortedQuestions[i + 1].guid;
@@ -123,7 +242,6 @@ export function useSurveyTaker(
       }
     }
 
-    // Last question → end (only if not blocked)
     if (sortedQuestions.length > 0) {
       const lastGuid = sortedQuestions[sortedQuestions.length - 1].guid;
       const edgeId = `seq-${lastGuid}-end`;
@@ -132,7 +250,6 @@ export function useSurveyTaker(
       }
     }
 
-    // Custom edges OVERRIDE default mappings
     customEdgesList.forEach((custom) => {
       const edgeId = `seq-${custom.source}-${custom.target}`;
       if (!blockedSet.has(edgeId)) {
@@ -143,9 +260,6 @@ export function useSurveyTaker(
     return map;
   }
 
-  /**
-   * Evaluate all rules for a given source question and find the first matching one.
-   */
   function resolveNext(
     sourceGuid: string,
   ): { type: 'question'; guid: string } | { type: 'end' } | { type: 'sequential' } {
@@ -157,14 +271,12 @@ export function useSurveyTaker(
     const ratingAns = ratingAnswers[sourceGuid] ?? 0;
     const matrixAns = matrixAnswers[sourceGuid] ?? {};
 
-    // 1. Check conditions first (they have priority)
     for (const rule of conditions) {
       if (rule.sourceQuestionId !== sourceGuid) continue;
 
       const matches = evaluateCondition(rule, question, choiceAns, textAns, ratingAns, matrixAns);
       if (!matches) continue;
 
-      // Handle both object format { type: 'end_survey' } and string format "end_survey"
       const action = rule.action;
       const actionType = typeof action === 'string' ? action : action?.type;
 
@@ -181,7 +293,6 @@ export function useSurveyTaker(
       }
     }
 
-    // 2. Check sequential flow map
     const flowMap = buildFlowMap();
     const nextTarget = flowMap.get(sourceGuid);
 
@@ -195,18 +306,13 @@ export function useSurveyTaker(
       }
     }
 
-    // 3. No outgoing edge found → end survey
     if (sequentialEdges && (sequentialEdges.blockedEdges?.length || sequentialEdges.customEdges?.length)) {
       return { type: 'end' };
     }
 
-    // 4. Default sequential flow
     return { type: 'sequential' };
   }
 
-  /**
-   * Check if a control question was answered correctly.
-   */
   function checkControlQuestion(question: Question): void {
     if (!question.settings?.isControlQuestion || !question.settings.correctAnswer) {
       return;
@@ -257,6 +363,24 @@ export function useSurveyTaker(
       checkControlQuestion(currentQuestion);
     }
 
+    // If user came from completion screen to fill skipped questions,
+    // keep jumping only between unanswered questions and finish immediately.
+    if (reviewUnanswered) {
+      const remaining = getUnansweredQuestions().filter((q) => q.guid !== currentGuid);
+      if (remaining.length > 0) {
+        const nextGuid = remaining[0].guid;
+        const idx = path.indexOf(currentGuid);
+        setPath((prev) => {
+          const cutIdx = idx >= 0 ? idx + 1 : prev.length;
+          return [...prev.slice(0, cutIdx), nextGuid];
+        });
+        return;
+      }
+      setReviewUnanswered(false);
+      setEnded(true);
+      return;
+    }
+
     const result = resolveNext(currentGuid);
 
     if (result.type === 'end') {
@@ -279,14 +403,13 @@ export function useSurveyTaker(
       return;
     }
 
-    // Sequential fallback
     const currentIdx = sortedQuestions.findIndex((q) => q.guid === currentGuid);
     if (currentIdx < sortedQuestions.length - 1) {
       setPath((prev) => [...prev, sortedQuestions[currentIdx + 1].guid]);
     } else {
       setEnded(true);
     }
-  }, [currentGuid, ended, currentQuestion, answers, textAnswers, ratingAnswers, matrixAnswers, sortedQuestions, conditions, sequentialEdges]);
+  }, [currentGuid, ended, currentQuestion, reviewUnanswered, getUnansweredQuestions, answers, textAnswers, ratingAnswers, matrixAnswers, sortedQuestions, conditions, sequentialEdges, path]);
 
   const goPrev = useCallback(() => {
     if (path.length <= 1) return;
@@ -296,8 +419,6 @@ export function useSurveyTaker(
     }
     setPath((prev) => prev.slice(0, -1));
   }, [path.length, ended]);
-
-  /* ── Choice answers ── */
 
   const selectAnswer = useCallback(
     (questionGuid: string, answer: string, isMultiple: boolean) => {
@@ -323,8 +444,6 @@ export function useSurveyTaker(
     [answers],
   );
 
-  /* ── Text answers ── */
-
   const setTextAnswer = useCallback(
     (questionGuid: string, text: string) => {
       setTextAnswers((prev) => ({ ...prev, [questionGuid]: text }));
@@ -337,8 +456,6 @@ export function useSurveyTaker(
     [textAnswers],
   );
 
-  /* ── Rating answers ── */
-
   const setRatingAnswer = useCallback(
     (questionGuid: string, value: number) => {
       setRatingAnswers((prev) => ({ ...prev, [questionGuid]: value }));
@@ -350,8 +467,6 @@ export function useSurveyTaker(
     (questionGuid: string): number => ratingAnswers[questionGuid] ?? 0,
     [ratingAnswers],
   );
-
-  /* ── Matrix answers ── */
 
   const setMatrixAnswer = useCallback(
     (questionGuid: string, rowIndex: number, column: string, isMultiple: boolean) => {
@@ -383,8 +498,6 @@ export function useSurveyTaker(
     [matrixAnswers],
   );
 
-  /* ── Sortable answers ── */
-
   const setSortableAnswer = useCallback(
     (questionGuid: string, orderedItems: string[]) => {
       setSortableAnswers((prev) => ({ ...prev, [questionGuid]: orderedItems }));
@@ -397,8 +510,6 @@ export function useSurveyTaker(
     [sortableAnswers],
   );
 
-  /* ── Reset ── */
-
   const reset = useCallback(() => {
     setPath(sortedQuestions.length > 0 ? [sortedQuestions[0].guid] : []);
     setAnswers({});
@@ -407,10 +518,10 @@ export function useSurveyTaker(
     setMatrixAnswers({});
     setSortableAnswers({});
     setEnded(false);
+    setReviewUnanswered(false);
     setControlQuestionResults({});
+    startedAtRef.current = Date.now();
   }, [sortedQuestions]);
-
-  /* ── Collect all answers for submission ── */
 
   const getAllAnswers = useCallback(() => {
     return {
@@ -439,26 +550,25 @@ export function useSurveyTaker(
     isCurrentQuestionAnswered,
     goNext,
     goPrev,
-    // Choice
     selectAnswer,
     getSelectedAnswers,
-    // Text
     setTextAnswer,
     getTextAnswer,
-    // Rating
     setRatingAnswer,
     getRatingAnswer,
-    // Matrix
     setMatrixAnswer,
     getMatrixAnswer,
-    // Sortable
     setSortableAnswer,
     getSortableAnswer,
-    // Misc
     reset,
     path,
     controlQuestionResults,
     getAllAnswers,
+    getUnansweredQuestions,
+    goToQuestion,
+    startUnansweredReview,
+    getDurationMs,
+    draftRestored,
+    lastSavedAt,
   };
 }
-

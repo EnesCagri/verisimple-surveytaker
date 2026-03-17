@@ -180,7 +180,7 @@ function ChoicePreview({
                 w-full text-left rounded-2xl border-2 transition-all duration-200 ease-out group
                 ${hasAnyImage ? 'p-3 flex flex-col' : 'px-5 py-4 flex items-center gap-4'}
                 ${isSelected
-                  ? 'border-primary bg-primary/[0.04] shadow-sm'
+                  ? 'border-primary bg-primary/4 shadow-sm'
                   : 'border-base-300/50 bg-base-100 hover:border-primary/30 hover:shadow-sm'
                 }
               `}
@@ -896,7 +896,7 @@ function SortableItem({
         flex items-center gap-3 px-5 py-4 rounded-2xl border-2 bg-base-100 cursor-grab active:cursor-grabbing
         transition-all duration-200 select-none group
         ${isDragging
-          ? 'border-primary/50 bg-primary/[0.04] shadow-lg scale-[1.02] opacity-80 z-50'
+          ? 'border-primary/50 bg-primary/4 shadow-lg scale-[1.02] opacity-80 z-50'
           : 'border-base-300/50 hover:border-primary/30 hover:shadow-sm'
         }
       `}
@@ -1035,6 +1035,22 @@ function SortablePreview({
    Matrix Likert Preview
    ═══════════════════════════════════════════ */
 
+function useIsMobile(breakpoint = 640): boolean {
+  const [isMobile, setIsMobile] = useState(() => {
+    try { return window.innerWidth < breakpoint; } catch { return false; }
+  });
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    setIsMobile(mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 function MatrixLikertPreview({
   question,
   value,
@@ -1048,6 +1064,8 @@ function MatrixLikertPreview({
   const columns = (question.settings?.columns ?? []).filter(Boolean);
   const matrixType = question.settings?.matrixType ?? 'single';
   const isMultiple = matrixType === 'multiple';
+  const isMobile = useIsMobile();
+  const [expandedRow, setExpandedRow] = useState<number | null>(0);
 
   if (rows.length === 0 || columns.length === 0) {
     return (
@@ -1080,7 +1098,6 @@ function MatrixLikertPreview({
         )}
       </div>
 
-      {/* Question image */}
       {question.image && (
         <div className="mb-6 rounded-xl overflow-hidden border border-base-300/30">
           <img src={question.image} alt="" className="w-full max-h-72 object-contain bg-base-200/30" />
@@ -1093,63 +1110,123 @@ function MatrixLikertPreview({
           : 'Her satır için bir seçenek seçin'}
       </p>
 
-      <div className="overflow-x-auto -mx-2">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              <th className="text-left pb-4 pr-4 text-base-content/50 font-medium min-w-[140px]" />
-              {columns.map((col, ci) => (
-                <th
-                  key={ci}
-                  className="text-center pb-4 px-2 text-xs text-base-content/50 font-medium min-w-[80px]"
+      {/* Desktop: table layout */}
+      {!isMobile && (
+        <div className="overflow-x-auto -mx-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="text-left pb-4 pr-4 text-base-content/50 font-medium min-w-[140px]" />
+                {columns.map((col, ci) => (
+                  <th key={ci} className="text-center pb-4 px-2 text-xs text-base-content/50 font-medium min-w-[80px]">
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, ri) => {
+                const selectedCols = value[ri] ?? [];
+                return (
+                  <tr key={ri} className="border-t border-base-300/20">
+                    <td className="py-4 pr-4 text-base-content/70 font-medium">{row}</td>
+                    {columns.map((col, ci) => {
+                      const isSelected = selectedCols.includes(col);
+                      return (
+                        <td key={ci} className="text-center py-4 px-2">
+                          <button
+                            className="inline-flex items-center justify-center focus:outline-none group"
+                            onClick={() => onChange(ri, col, isMultiple)}
+                          >
+                            <span className={`w-6 h-6 flex items-center justify-center transition-all duration-200 ${isMultiple ? 'rounded-md' : 'rounded-full'} ${isSelected ? 'bg-primary text-primary-content shadow-sm' : 'border-2 border-base-300/50 group-hover:border-primary/40'}`}>
+                              {isSelected && (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M20 6 9 17l-5-5" />
+                                </svg>
+                              )}
+                            </span>
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Mobile: accordion card layout */}
+      {isMobile && (
+        <div className="space-y-2.5">
+          {rows.map((row, ri) => {
+            const selectedCols = value[ri] ?? [];
+            const isOpen = expandedRow === ri;
+            const answeredCount = selectedCols.length;
+
+            return (
+              <div key={ri} className={`rounded-2xl border-2 transition-all duration-200 overflow-hidden ${isOpen ? 'border-primary/30 bg-primary/2' : 'border-base-300/40 bg-base-100'}`}>
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                  onClick={() => setExpandedRow(isOpen ? null : ri)}
                 >
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, ri) => {
-              const selectedCols = value[ri] ?? [];
-              return (
-                <tr key={ri} className="border-t border-base-300/20">
-                  <td className="py-4 pr-4 text-base-content/70 font-medium">
+                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-bold shrink-0 transition-colors ${isOpen ? 'bg-primary/15 text-primary' : 'bg-base-200/60 text-base-content/40'}`}>
+                    {ri + 1}
+                  </span>
+                  <span className={`flex-1 text-sm font-medium truncate transition-colors ${isOpen ? 'text-base-content/85' : 'text-base-content/60'}`}>
                     {row}
-                  </td>
-                  {columns.map((col, ci) => {
-                    const isSelected = selectedCols.includes(col);
-                    return (
-                      <td key={ci} className="text-center py-4 px-2">
+                  </span>
+                  {answeredCount > 0 && !isOpen && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/15 text-primary text-[10px] font-bold shrink-0">
+                      {answeredCount}
+                    </span>
+                  )}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`shrink-0 text-base-content/30 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 space-y-2">
+                    {columns.map((col, ci) => {
+                      const isSelected = selectedCols.includes(col);
+                      return (
                         <button
-                          className="inline-flex items-center justify-center focus:outline-none group"
+                          key={ci}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 text-left ${isSelected ? 'border-primary bg-primary/6' : 'border-base-300/40 bg-base-100 active:bg-base-200/40'}`}
                           onClick={() => onChange(ri, col, isMultiple)}
                         >
-                          <span
-                            className={`
-                              w-6 h-6 flex items-center justify-center transition-all duration-200
-                              ${isMultiple ? 'rounded-md' : 'rounded-full'}
-                              ${isSelected
-                                ? 'bg-primary text-primary-content shadow-sm'
-                                : 'border-2 border-base-300/50 group-hover:border-primary/40'
-                              }
-                            `}
-                          >
+                          <span className={`w-5 h-5 flex items-center justify-center shrink-0 transition-all duration-200 ${isMultiple ? 'rounded-md' : 'rounded-full'} ${isSelected ? 'bg-primary text-primary-content' : 'border-2 border-base-300/50'}`}>
                             {isSelected && (
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M20 6 9 17l-5-5" />
                               </svg>
                             )}
                           </span>
+                          <span className={`text-sm flex-1 transition-colors ${isSelected ? 'text-base-content/85 font-medium' : 'text-base-content/55'}`}>
+                            {col}
+                          </span>
                         </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
