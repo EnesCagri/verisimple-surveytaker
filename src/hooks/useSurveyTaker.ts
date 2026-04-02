@@ -60,6 +60,7 @@ export function useSurveyTaker(
   const [matrixAnswers, setMatrixAnswers] = useState<Record<string, Record<number, string[]>>>({});
   const [sortableAnswers, setSortableAnswers] = useState<Record<string, string[]>>({});
   const [ended, setEnded] = useState(false);
+  const [endedInvalid, setEndedInvalid] = useState(false);
   const [controlQuestionResults, setControlQuestionResults] = useState<
     Record<string, { isCorrect: boolean; userAnswer: string[]; correctAnswer: string[] }>
   >({});
@@ -75,6 +76,27 @@ export function useSurveyTaker(
 
   // Unanswered review mode (jump only between unanswered questions)
   const [reviewUnanswered, setReviewUnanswered] = useState(false);
+  /** Aynı soruda ilk İleri = uyarı, ikinci İleri = yanıtsız geçişe izin */
+  const [skipArmedGuid, setSkipArmedGuid] = useState<string | null>(null);
+  /** reminder: lütfen yanıtlayın · ack: yanıtsız geçiş onayı */
+  const [skipToast, setSkipToast] = useState<null | { kind: 'reminder' | 'ack' }>(null);
+  const skipToastTimerRef = useRef<number | null>(null);
+
+  const showSkipToast = useCallback((kind: 'reminder' | 'ack') => {
+    if (skipToastTimerRef.current) window.clearTimeout(skipToastTimerRef.current);
+    setSkipToast({ kind });
+    const ms = kind === 'reminder' ? 2800 : 3200;
+    skipToastTimerRef.current = window.setTimeout(() => {
+      setSkipToast(null);
+      skipToastTimerRef.current = null;
+    }, ms);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (skipToastTimerRef.current) window.clearTimeout(skipToastTimerRef.current);
+    };
+  }, []);
 
   // Load draft once (if available) when embedded with a surveyId
   useEffect(() => {
@@ -96,6 +118,7 @@ export function useSurveyTaker(
     setMatrixAnswers(draft.matrixAnswers || {});
     setSortableAnswers(draft.sortableAnswers || {});
     setEnded(!!draft.ended);
+    setEndedInvalid(false);
 
     if (draft.startedAt) {
       startedAtRef.current = draft.startedAt;
@@ -143,6 +166,7 @@ export function useSurveyTaker(
 
   const isFirst = path.length <= 1;
   const isCompleted = ended || (currentGuid === null && path.length > 0);
+  const isSurveyValid = !endedInvalid;
 
   const isLast =
     !ended &&
@@ -262,7 +286,7 @@ export function useSurveyTaker(
 
   function resolveNext(
     sourceGuid: string,
-  ): { type: 'question'; guid: string } | { type: 'end' } | { type: 'sequential' } {
+  ): { type: 'question'; guid: string } | { type: 'end' } | { type: 'end_invalid' } | { type: 'sequential' } {
     const question = questions.find((q) => q.guid === sourceGuid);
     if (!question) return { type: 'sequential' };
 
@@ -288,6 +312,7 @@ export function useSurveyTaker(
           ? action.targetQuestionId
           : (rule as any).targetQuestionId;
         if (targetId) {
+          if (targetId === '__invalid_end__') return { type: 'end_invalid' };
           return { type: 'question', guid: targetId };
         }
       }
@@ -299,6 +324,9 @@ export function useSurveyTaker(
     if (nextTarget) {
       if (nextTarget === '__end__') {
         return { type: 'end' };
+      }
+      if (nextTarget === '__invalid_end__') {
+        return { type: 'end_invalid' };
       }
       const targetExists = sortedQuestions.some((q) => q.guid === nextTarget);
       if (targetExists) {
@@ -353,11 +381,16 @@ export function useSurveyTaker(
   const goNext = useCallback(() => {
     if (!currentGuid || ended) return;
 
-    if (currentQuestion && currentQuestion.required) {
-      if (!isQuestionAnswered(currentQuestion)) {
+    if (currentQuestion && !isQuestionAnswered(currentQuestion)) {
+      if (skipArmedGuid !== currentGuid) {
+        setSkipArmedGuid(currentGuid);
+        showSkipToast('reminder');
         return;
       }
+      showSkipToast('ack');
     }
+
+    setSkipArmedGuid(null);
 
     if (currentQuestion) {
       checkControlQuestion(currentQuestion);
@@ -384,6 +417,12 @@ export function useSurveyTaker(
     const result = resolveNext(currentGuid);
 
     if (result.type === 'end') {
+      setEndedInvalid(false);
+      setEnded(true);
+      return;
+    }
+    if (result.type === 'end_invalid') {
+      setEndedInvalid(true);
       setEnded(true);
       return;
     }
@@ -407,9 +446,10 @@ export function useSurveyTaker(
     if (currentIdx < sortedQuestions.length - 1) {
       setPath((prev) => [...prev, sortedQuestions[currentIdx + 1].guid]);
     } else {
+      setEndedInvalid(false);
       setEnded(true);
     }
-  }, [currentGuid, ended, currentQuestion, reviewUnanswered, getUnansweredQuestions, answers, textAnswers, ratingAnswers, matrixAnswers, sortedQuestions, conditions, sequentialEdges, path]);
+  }, [currentGuid, ended, currentQuestion, skipArmedGuid, reviewUnanswered, getUnansweredQuestions, answers, textAnswers, ratingAnswers, matrixAnswers, sortedQuestions, conditions, sequentialEdges, path, showSkipToast]);
 
   const goPrev = useCallback(() => {
     if (path.length <= 1) return;
@@ -418,6 +458,7 @@ export function useSurveyTaker(
       return;
     }
     setPath((prev) => prev.slice(0, -1));
+    setSkipArmedGuid(null);
   }, [path.length, ended]);
 
   const selectAnswer = useCallback(
@@ -518,8 +559,12 @@ export function useSurveyTaker(
     setMatrixAnswers({});
     setSortableAnswers({});
     setEnded(false);
+    setEndedInvalid(false);
     setReviewUnanswered(false);
     setControlQuestionResults({});
+    setSkipArmedGuid(null);
+    setSkipToast(null);
+    if (skipToastTimerRef.current) window.clearTimeout(skipToastTimerRef.current);
     startedAtRef.current = Date.now();
   }, [sortedQuestions]);
 
@@ -548,6 +593,8 @@ export function useSurveyTaker(
     isCompleted,
     isCurrentQuestionRequired,
     isCurrentQuestionAnswered,
+    isSurveyValid,
+    skipToast,
     goNext,
     goPrev,
     selectAnswer,

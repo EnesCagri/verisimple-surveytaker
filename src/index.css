@@ -1,4 +1,6 @@
+@import url("https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
+
 
 @plugin "daisyui" {
   themes: false;
@@ -31,8 +33,58 @@
 
 body {
   @apply bg-base-100 min-h-screen antialiased;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family:
+    "Urbanist",
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
 }
+
+h1, h2, h3, h4, h5, h6 {
+  font-family:
+    "Urbanist",
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-weight: 700;
+}
+
+input, textarea, select, button {
+  font-family:
+    "Urbanist",
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+/* Typography scale alignment (VeriSimple.Web guide) */
+.text-xs { font-size: 11px !important; line-height: 1.35 !important; }
+.text-sm { font-size: 13px !important; line-height: 1.45 !important; }
+.text-base { font-size: 14px !important; line-height: 1.5 !important; }
+.text-lg { font-size: 16px !important; line-height: 1.45 !important; }
+.text-xl { font-size: 20px !important; line-height: 1.35 !important; }
+.text-2xl { font-size: 22px !important; line-height: 1.3 !important; }
+
+.btn {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+.btn-sm { font-size: 14px; }
+.badge { font-size: 11px; }
+
+/* Improve readability for muted gray texts */
+.text-base-content\/20 { color: color-mix(in oklab, var(--color-base-content) 52%, transparent) !important; }
+.text-base-content\/30 { color: color-mix(in oklab, var(--color-base-content) 58%, transparent) !important; }
+.text-base-content\/35 { color: color-mix(in oklab, var(--color-base-content) 63%, transparent) !important; }
+.text-base-content\/40 { color: color-mix(in oklab, var(--color-base-content) 68%, transparent) !important; }
+.text-base-content\/50 { color: color-mix(in oklab, var(--color-base-content) 74%, transparent) !important; }
 
 /* Smooth transitions for all interactive elements */
 .btn, .card, .input, .textarea, .select, .badge {

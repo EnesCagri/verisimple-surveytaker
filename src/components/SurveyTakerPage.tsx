@@ -8,6 +8,7 @@ interface CompletionPayload {
   answers: ReturnType<ReturnType<typeof useSurveyTaker>['getAllAnswers']>;
   controlQuestionResults: ReturnType<typeof useSurveyTaker>['controlQuestionResults'];
   durationMs: number;
+  isValid: boolean;
 }
 
 interface SurveyTakerPageProps {
@@ -39,6 +40,7 @@ export function SurveyTakerPage({
     isCompleted,
     isCurrentQuestionRequired,
     isCurrentQuestionAnswered,
+    skipToast,
     goNext,
     goPrev,
     selectAnswer,
@@ -53,6 +55,7 @@ export function SurveyTakerPage({
     getSortableAnswer,
     reset,
     controlQuestionResults,
+    isSurveyValid,
     getAllAnswers,
     getUnansweredQuestions,
     startUnansweredReview,
@@ -107,13 +110,28 @@ export function SurveyTakerPage({
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="flex items-start justify-center p-6 min-h-full">
             <div className="text-center max-w-lg w-full py-8">
-              <div className="w-16 h-16 rounded-3xl bg-success/10 flex items-center justify-center mx-auto mb-5">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+              <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 ${isSurveyValid ? 'bg-success/10' : 'bg-warning/12'}`}>
+                {isSurveyValid ? (
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 15s1.5-2 4-2 4 2 4 2" />
+                    <line x1="9" y1="9" x2="9.01" y2="9" />
+                    <line x1="15" y1="9" x2="15.01" y2="9" />
+                  </svg>
+                )}
               </div>
-              <h2 className="text-2xl font-bold text-base-content/80 mb-2">Tamamlandı!</h2>
-              <p className="text-base-content/40 mb-6">Anketi tamamladınız, teşekkürler.</p>
+              <h2 className="text-2xl font-bold text-base-content/80 mb-2">
+                {isSurveyValid ? 'Tamamlandı!' : 'Üzgünüz'}
+              </h2>
+              <p className="text-base-content/40 mb-6">
+                {isSurveyValid
+                  ? 'Anketi tamamladınız, teşekkürler.'
+                  : 'Bu anket için uygun değilsiniz, ne yazık ki.'}
+              </p>
 
               {/* Soft validation: unanswered question warning */}
               {unanswered.length > 0 && (
@@ -170,6 +188,7 @@ export function SurveyTakerPage({
                       answers: answersData,
                       controlQuestionResults,
                       durationMs: getDurationMs(),
+                      isValid: isSurveyValid,
                     })}
                   >
                     Gönder
@@ -186,6 +205,33 @@ export function SurveyTakerPage({
   return (
     <div className="h-dvh overflow-hidden bg-base-100 flex flex-col">
       <SurveyHeader title={title} showSavedIndicator={showSavedIndicator} />
+
+      {skipToast && (
+        <div
+          className="fixed bottom-4 right-4 z-50 max-w-[min(100vw-2rem,22rem)] animate-[fadeSlideIn_0.25s_ease-out]"
+          role="status"
+        >
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm font-medium leading-snug shadow-md ${
+              skipToast.kind === 'reminder'
+                ? 'border-amber-200/80 bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 text-amber-950 dark:border-amber-200/70 dark:from-amber-50 dark:via-orange-50 dark:to-amber-100 dark:text-amber-950'
+                : 'border-rose-200/80 bg-gradient-to-br from-rose-50 via-red-50 to-pink-50 text-rose-900 dark:border-rose-200/70 dark:from-rose-50 dark:via-red-50 dark:to-pink-50 dark:text-rose-900'
+            }`}
+          >
+            {skipToast.kind === 'reminder' ? (
+              <>
+                Lütfen mümkünse bu soruyu yanıtlayın. Boş geçmek istiyorsanız <strong className="font-semibold">İleri</strong>&apos;ye bir kez daha
+                basın.
+              </>
+            ) : (
+              <>
+                Bu soruyu yanıtsız bıraktınız — anlıyoruz. Anket kalitesi için mümkünse diğer soruları eksiksiz yanıtlamanızı rica
+                ederiz.
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Draft restored toast */}
       {showRestoredBanner && (
@@ -220,6 +266,7 @@ export function SurveyTakerPage({
                 question={currentQuestion}
                 selectedAnswers={getSelectedAnswers(currentQuestion.guid)}
                 onSelectAnswer={selectAnswer}
+                onSingleChoiceNext={goNext}
                 textValue={getTextAnswer(currentQuestion.guid)}
                 onTextChange={setTextAnswer}
                 ratingValue={getRatingAnswer(currentQuestion.guid)}
@@ -260,15 +307,7 @@ export function SurveyTakerPage({
               Geri
             </button>
 
-            <button
-              className={`btn btn-sm rounded-xl px-6 gap-2 ${
-                isCurrentQuestionRequired && !isCurrentQuestionAnswered
-                  ? 'btn-disabled bg-base-300/40 text-base-content/30 cursor-not-allowed'
-                  : 'btn-primary'
-              }`}
-              onClick={goNext}
-              disabled={isCurrentQuestionRequired && !isCurrentQuestionAnswered}
-            >
+            <button className="btn btn-primary btn-sm rounded-xl px-6 gap-2" onClick={goNext}>
               {isLast ? 'Tamamla' : 'İleri'}
               {!isLast && (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

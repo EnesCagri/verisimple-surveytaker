@@ -82,6 +82,7 @@ export interface NodePositions {
   [questionGuid: string]: { x: number; y: number } | undefined;
   __start__?: { x: number; y: number };
   __end__?: { x: number; y: number };
+  __invalid_end__?: { x: number; y: number };
 }
 
 export interface Survey {
